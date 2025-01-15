@@ -1,7 +1,7 @@
 from dotenv import load_dotenv
 import os
 import base64
-from requests import post
+from requests import post, get
 import json
 
 load_dotenv()
@@ -26,5 +26,19 @@ def get_token():
     token = json_result["access_token"]
     return token
 
+def get_auth_header(token):
+    return {"Authorization": "Bearer " + token}
+
+def search_for_artist(token, artist_name):
+    url = "https://api.spotify.com/v1/search"
+    headers = get_auth_header(token)
+    query = f"?q={artist_name}&type=artist&limit=1"
+
+    query_url = url + query
+    result = get(query_url, headers=headers)
+    json_result = json.loads(result.content)
+    print(json_result)
+
+
 token = get_token()
-print(token)
+search_for_artist(token,"Daniel Caeser")
