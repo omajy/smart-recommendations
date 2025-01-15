@@ -36,9 +36,27 @@ def search_for_artist(token, artist_name):
 
     query_url = url + query
     result = get(query_url, headers=headers)
-    json_result = json.loads(result.content)
-    print(json_result)
+    json_result = json.loads(result.content)["artists"]["items"]
+    if len(json_result) == 0:
+        print("No artists with this name were found")
+        return None
+    
+    return json_result[0]
 
 
 token = get_token()
-search_for_artist(token,"Daniel Caeser")
+result = search_for_artist(token,"Brent Faiyaz")
+artist_id = result["id"]
+
+def get_songs_by_artist(token, artist_id):
+    url = f"https://api.spotify.com/v1/artists/{artist_id}/top-tracks?country=US"
+    headers = get_auth_header(token)
+    result = get(url, headers=headers)
+    json_result = json.loads(result.content)["tracks"]
+    return json_result
+
+songs = get_songs_by_artist(token, artist_id)
+print(songs)
+
+for idx,  song in enumerate(songs):
+    print(f"{idx+1}. {song['name']}")
