@@ -1,3 +1,3 @@
 # smart-recommendations
 
-personalised music recommendations using spotify data
+spotify user authentication based music recommendation application using the spotify web api
