@@ -1,5 +1,5 @@
 from flask import Flask, request, redirect, session, url_for
-import os 
+import os
 from dotenv import load_dotenv
 from spotipy import Spotify
 from spotipy.oauth2 import SpotifyOAuth
@@ -10,7 +10,6 @@ load_dotenv()
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.urandom(64)
-
 
 client_id = os.getenv("CLIENT_ID")
 client_secret = os.getenv("CLIENT_SECRET")
@@ -28,61 +27,88 @@ sp_oauth = SpotifyOAuth(
 )
 sp = Spotify(auth_manager=sp_oauth)
 
+
 @app.route('/')
 def home():
     if not sp_oauth.validate_token(cache_handler.get_cached_token()):
         auth_url = sp_oauth.get_authorize_url()
         return redirect(auth_url)
-    return redirect(url_for('get_playlists'))
+    return redirect(url_for('select_playlists')) 
 
 
 @app.route('/callback')
 def callback():
     sp_oauth.get_access_token(request.args['code'])
-    return redirect(url_for('get_playlists'))
+    return redirect(url_for('select_playlists'))  
 
 
-@app.route('/get_playlists')
-def get_playlists(): 
+@app.route('/select_playlists')
+def select_playlists():
     if not sp_oauth.validate_token(cache_handler.get_cached_token()):
         auth_url = sp_oauth.get_authorize_url()
         return redirect(auth_url)
 
     playlists = sp.current_user_playlists()
-    playlists_html = '<br>'.join([f'<a href="/get_playlist_tracks/{pl["id"]}">{pl["name"]}</a>' for pl in playlists['items']])
+    
+    playlist_options = ""
+    for playlist in playlists['items']:
+        playlist_options += f'<input type="checkbox" name="playlists" value="{playlist["id"]}"> {playlist["name"]}<br>'
 
-    return f"<h1>Playlists</h1>{playlists_html}"
+    return f"""
+        <form method="post" action="/get_selected_playlists">
+            <h3>Select Playlists to Analyze</h3>
+            {playlist_options}
+            <button type="submit">Submit</button>
+        </form>
+    """
 
-@app.route('/get_playlist_tracks/<playlist_id>')
-def get_playlist_tracks(playlist_id):
+@app.route('/get_selected_playlists', methods=['POST'])
+def get_selected_playlists(): 
+    selected_playlist_ids = request.form.getlist('playlists')
+
     if not sp_oauth.validate_token(cache_handler.get_cached_token()):
         auth_url = sp_oauth.get_authorize_url()
         return redirect(auth_url)
 
-    playlist_items = sp.playlist_items(playlist_id)
     artist_counter = Counter()
-
+    genre_counter = Counter()
     tracks_info = []
 
-    for item in playlist_items['items']:
-        track = item['track']
-        track_name = track['name']
-        artist_names = ', '.join([artist['name'] for artist in track['artists']])
-        track_url = track['external_urls']['spotify']
-        tracks_info.append(f"{track_name} by {artist_names}: {track_url}")
+    for playlist_id in selected_playlist_ids: 
+        playlist_items = sp.playlist_items(playlist_id)
 
-        for artist in track['artists']:
-            artist_name = artist['name']
-            artist_counter[artist_name] += 1
+        for item in playlist_items['items']:
+            track = item.get('track')
+            if track:
+                track_name = track.get('name', 'Unknown Track Name')
+                artist_names = ', '.join([artist['name'] for artist in track['artists']])
+                track_url = track.get('external_urls', {}).get('spotify', '#')
+
+                tracks_info.append(f"{track_name} by {artist_names}: {track_url}")
+
+                for artist in track['artists']:
+                    artist_name = artist['name']
+                    artist_counter[artist_name] += 1
+
+                    artist_data = sp.artist(artist['id'])
+                    artist_genres = artist_data.get('genres', [])
+                    
+                    if artist_genres:
+                        for genre in artist_genres:
+                            genre_counter[genre] += 1
+
+    if not genre_counter:
+        genre_stats = "<p>No genres found for the selected tracks.</p>"
+    else:
+        genre_stats = "<br>".join([f"{genre}: {count} times" for genre, count in genre_counter.items()])
 
     artist_stats = "<br>".join([f"{artist}: {count} times" for artist, count in artist_counter.items()])
-    tracks_html = "<br>".join(tracks_info)
 
     return f"""
-        <h1>Tracks in Playlist</h1>
-        <div>{tracks_html}</div>
         <h2>Artist Statistics</h2>
         <div>{artist_stats}</div>
+        <h2>Genre Statistics</h2>
+        <div>{genre_stats}</div>
     """
 
 
@@ -90,6 +116,7 @@ def get_playlist_tracks(playlist_id):
 def logout():
     session.clear()
     return redirect(url_for('home'))
+
 
 if __name__ == '__main__':
     app.run(debug=True, port=3000)
