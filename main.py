@@ -4,6 +4,7 @@ from dotenv import load_dotenv
 from spotipy import Spotify
 from spotipy.oauth2 import SpotifyOAuth
 from spotipy.cache_handler import FlaskSessionCacheHandler
+from collections import Counter
 
 load_dotenv()
 
@@ -34,10 +35,12 @@ def home():
         return redirect(auth_url)
     return redirect(url_for('get_playlists'))
 
+
 @app.route('/callback')
 def callback():
     sp_oauth.get_access_token(request.args['code'])
     return redirect(url_for('get_playlists'))
+
 
 @app.route('/get_playlists')
 def get_playlists(): 
@@ -46,10 +49,42 @@ def get_playlists():
         return redirect(auth_url)
 
     playlists = sp.current_user_playlists()
-    playlists_info = [(pl['name'], pl['external_urls']['spotify']) for pl in playlists['items']]
-    playlists_html = '<br>'.join([f'{name}: {url}' for name, url in playlists_info])
+    playlists_html = '<br>'.join([f'<a href="/get_playlist_tracks/{pl["id"]}">{pl["name"]}</a>' for pl in playlists['items']])
 
-    return playlists_html
+    return f"<h1>Playlists</h1>{playlists_html}"
+
+@app.route('/get_playlist_tracks/<playlist_id>')
+def get_playlist_tracks(playlist_id):
+    if not sp_oauth.validate_token(cache_handler.get_cached_token()):
+        auth_url = sp_oauth.get_authorize_url()
+        return redirect(auth_url)
+
+    playlist_items = sp.playlist_items(playlist_id)
+    artist_counter = Counter()
+
+    tracks_info = []
+
+    for item in playlist_items['items']:
+        track = item['track']
+        track_name = track['name']
+        artist_names = ', '.join([artist['name'] for artist in track['artists']])
+        track_url = track['external_urls']['spotify']
+        tracks_info.append(f"{track_name} by {artist_names}: {track_url}")
+
+        for artist in track['artists']:
+            artist_name = artist['name']
+            artist_counter[artist_name] += 1
+
+    artist_stats = "<br>".join([f"{artist}: {count} times" for artist, count in artist_counter.items()])
+    tracks_html = "<br>".join(tracks_info)
+
+    return f"""
+        <h1>Tracks in Playlist</h1>
+        <div>{tracks_html}</div>
+        <h2>Artist Statistics</h2>
+        <div>{artist_stats}</div>
+    """
+
 
 @app.route('/logout')
 def logout():
