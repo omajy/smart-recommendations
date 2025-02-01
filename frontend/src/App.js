@@ -1,6 +1,7 @@
 import logo from './logo.svg';
 import './App.css';
 import React from 'react';
+import ArtistStatistics from './ArtistStatistics';
 
 function App() {
   return (
