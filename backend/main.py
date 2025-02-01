@@ -1,4 +1,4 @@
-from flask import Flask, request, redirect, session, url_for
+from flask import Flask, request, redirect, session, url_for, jsonify
 import os
 from dotenv import load_dotenv
 from spotipy import Spotify
@@ -97,19 +97,12 @@ def get_selected_playlists():
                         for genre in artist_genres:
                             genre_counter[genre] += 1
 
-    if not genre_counter:
-        genre_stats = "<p>No genres found for the selected tracks.</p>"
-    else:
-        genre_stats = "<br>".join([f"{genre}: {count} times" for genre, count in genre_counter.items()])
+    data = {
+        "artists": dict(artist_counter),
+        "genres": dict(genre_counter)
+    }
 
-    artist_stats = "<br>".join([f"{artist}: {count} times" for artist, count in artist_counter.items()])
-
-    return f"""
-        <h2>Artist Statistics</h2>
-        <div>{artist_stats}</div>
-        <h2>Genre Statistics</h2>
-        <div>{genre_stats}</div>
-    """
+    return jsonify(data)
 
 
 @app.route('/logout')
